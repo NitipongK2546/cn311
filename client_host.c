@@ -6,6 +6,8 @@
 #define PORT 12000
 #define WORD_LEN 5
 
+#define MAX_GUESSES 6
+
 #define BUFFER_SIZE 999
 
 int main() {
@@ -37,6 +39,17 @@ int main() {
     //Sending
     send(host_socket, word, WORD_LEN, 0);
     printf("Word sent to server.\n");
+
+    for (int i = 0; i < MAX_GUESSES; i++) {
+        if (strcmp(buffer, "The other player won.") == 0) {
+            break;
+        } else {
+            memset(buffer, 0, sizeof(buffer));
+            read(host_socket, buffer, BUFFER_SIZE);
+            buffer[BUFFER_SIZE] = '\0';
+            printf("%s\n", buffer);
+        }
+    }
 
     close(host_socket);
     return 0;

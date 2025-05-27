@@ -8,10 +8,16 @@
 #define PORT 12000
 #define WORD_LEN 5
 
+#define MAX_GUESSES 6
+
+#define BUFFER_SIZE 999
+
 int main() {
     int guess_socket;
     struct sockaddr_in server_address;
     char guess[WORD_LEN + 99], word[WORD_LEN + 1], feedback[WORD_LEN + 1], result[8];
+
+    char buffer[BUFFER_SIZE + 1];
 
     guess_socket = socket(AF_INET, SOCK_STREAM, 0);
     server_address.sin_family = AF_INET;
@@ -19,9 +25,29 @@ int main() {
     inet_pton(AF_INET, "127.0.0.1", &server_address.sin_addr);
 
     connect(guess_socket, (struct sockaddr *)&server_address, sizeof(server_address));
+    
+    // Waiting.
 
-    for (int i = 0; i < 6; i++) {
-        printf("Enter your guess (%d/6): ", i + 1);
+    memset(buffer, 0, sizeof(buffer));
+    read(guess_socket, buffer, BUFFER_SIZE);
+    buffer[BUFFER_SIZE] = '\0';
+    printf("Your role is: %s\n", buffer);
+
+    memset(buffer, 0, sizeof(buffer));
+    read(guess_socket, buffer, BUFFER_SIZE);
+    buffer[BUFFER_SIZE] = '\0';
+    printf("%s\n", buffer);
+
+    // memset(buffer, 0, sizeof(buffer));
+    // read(guess_socket, buffer, BUFFER_SIZE);
+    // buffer[BUFFER_SIZE] = '\0';
+    // printf("%s\n", buffer);
+
+    for (int i = 0; i < MAX_GUESSES; i++) {
+
+        // Actual guessing part.
+
+        printf("Enter your guess (%d/%d): ", i + 1, MAX_GUESSES);
         
         fgets(guess, sizeof(guess), stdin);
         guess[strcspn(guess, "\n")] = 0;
