@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     // } 
 
     // Create socket to listen for port, for host, and for guesser.
-    int host_socket, guess_socket, listen_socket;
+    int client_host, client_guess, listen_socket;
 
     struct sockaddr_in server_address; // server address
     int addrlen = sizeof(server_address); // 
@@ -58,51 +58,51 @@ int main(int argc, char *argv[]) {
 
     printf("Waiting for Client 1...\n");
 
-    host_socket = accept(listen_socket, (struct sockaddr *)&server_address, (socklen_t*)&addrlen);
+    client_host = accept(listen_socket, (struct sockaddr *)&server_address, (socklen_t*)&addrlen);
 
     printf("Waiting for Client 2 (guesser)...\n");
-    guess_socket = accept(listen_socket, (struct sockaddr *)&server_address, (socklen_t*)&addrlen);
+    client_guess = accept(listen_socket, (struct sockaddr *)&server_address, (socklen_t*)&addrlen);
 
-    send(host_socket, "Word Setter", strlen("Word Setter"), 0);
+    send(client_host, "Word Setter", strlen("Word Setter"), 0);
 
-    send(guess_socket, "Word Guesser\n", strlen("Word Guesser\n"), 0);
-    send(guess_socket, "Waiting for word...", strlen("Waiting for word..."), 0);
+    send(client_guess, "Word Guesser\n", strlen("Word Guesser\n"), 0);
+    send(client_guess, "Waiting for word...", strlen("Waiting for word..."), 0);
 
-    read(host_socket, word, WORD_LEN);
+    read(client_host, word, WORD_LEN);
     word[WORD_LEN] = '\0';
     printf("Received word from Client 1: %s\n", word);
 
-    send(guess_socket, "Ready", strlen("Ready"), 0);
+    send(client_guess, "Ready", strlen("Ready"), 0);
 
     for (int i = 0; i < MAX_GUESSES; i++) {
-        int valread = read(guess_socket, guess, WORD_LEN);
+        int valread = read(client_guess, guess, WORD_LEN);
         guess[WORD_LEN] = '\0';
         printf("Guess %d: %s\n", i + 1, guess);
 
         color_answer(guess, word, color);
-        send(guess_socket, guess, strlen(guess), 0);
-        send(guess_socket, color, strlen(color), 0);
+        send(client_guess, guess, strlen(guess), 0);
+        send(client_guess, color, strlen(color), 0);
         
 
         if (strcmp(guess, word) == 0) {
             char *msg = "WIN";
-            send(guess_socket, msg, strlen(msg), 0);
-            send(host_socket, "The other player won.", strlen("The other player won."), 0);
+            send(client_guess, msg, strlen(msg), 0);
+            send(client_host, "The other player won.", strlen("The other player won."), 0);
             break;
         } else if (i == MAX_GUESSES - 1) {
             char *msg = "LOSE";
-            send(guess_socket, msg, strlen(msg), 0);
-            send(host_socket, "The other player lost.", strlen("The other player lost."), 0);
+            send(client_guess, msg, strlen(msg), 0);
+            send(client_host, "The other player lost.", strlen("The other player lost."), 0);
         } else {
             char *msg = "CONTINUE";
-            send(guess_socket, msg, strlen(msg), 0);
-            send(host_socket, "The other player guessed incorrectly.", strlen("The other player guessed incorrectly."), 0);
+            send(client_guess, msg, strlen(msg), 0);
+            send(client_host, "The other player guessed incorrectly.", strlen("The other player guessed incorrectly."), 0);
         }
     }
 
-    close(host_socket);
+    close(client_host);
     close(listen_socket);
-    close(guess_socket);
+    close(client_guess);
 
     return 0;
 
