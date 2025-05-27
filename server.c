@@ -11,27 +11,24 @@
 #define MAX_GUESSES 6
 #define WORD_LEN 5
 
-void give_feedback(char *guess, char *word, char *feedback) {
+void color_answer(char *guess, char *word, char *color) {
     for (int i = 0; i < WORD_LEN; i++) {
         if (guess[i] == word[i]) {
-            feedback[i] = 'G'; // Green: correct position
+            color[i] = 'G'; // Green: correct position
         } else if (strchr(word, guess[i])) {
-            feedback[i] = 'Y'; // Yellow: wrong position
+            color[i] = 'Y'; // Yellow: wrong position
         } else {
-            feedback[i] = 'B'; // Black: not in word
+            color[i] = 'B'; // Black: not in word
         }
     }
-    feedback[WORD_LEN] = '\0';
+    color[WORD_LEN] = '\0';
 }
 
 int main(int argc, char *argv[]) {
 
     // if(argc != 2)
     // {
-    //     printf("Usage: %s \"<name> <surname> <dateBE>\" \n", argv[0]);
-    //     printf("Example: Nitipong Kadsritalee 31012546 \n");
-    //     printf("Date: 31 January 2546 B.E. \n");
-    //     printf("Warning: Don't forget to quote \"<input>\" your input. \n");
+    //     maybe return a guide or maybe not.
     //     return 1;
     // } 
 
@@ -45,6 +42,7 @@ int main(int argc, char *argv[]) {
     char word[WORD_LEN + 1];
     char guess[WORD_LEN + 1];
     char color[WORD_LEN + 1];
+    char role[99];
 
     listen_socket = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -76,8 +74,10 @@ int main(int argc, char *argv[]) {
         guess[WORD_LEN] = '\0';
         printf("Guess %d: %s\n", i + 1, guess);
 
-        give_feedback(guess, word, color);
+        color_answer(guess, word, color);
+        send(guess_socket, guess, strlen(guess), 0);
         send(guess_socket, color, strlen(color), 0);
+        
 
         if (strcmp(guess, word) == 0) {
             char *msg = "WIN";

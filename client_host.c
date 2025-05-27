@@ -25,9 +25,10 @@ int main() {
     connect(host_socket, (struct sockaddr *)&server_address, sizeof(server_address));
 
     // Get the role you have: You joined first -> Word Setter.
+    memset(buffer, 0, sizeof(buffer));
     read(host_socket, buffer, BUFFER_SIZE);
     buffer[BUFFER_SIZE] = '\0';
-    printf("Your role is: %s\n", word);
+    printf("Your role is: %s\n", buffer);
 
     // Send word to the server to get the other client to guess.
     printf("Enter a 5-letter word: ");

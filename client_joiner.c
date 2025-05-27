@@ -11,7 +11,7 @@
 int main() {
     int guess_socket;
     struct sockaddr_in server_address;
-    char guess[WORD_LEN + 99], feedback[WORD_LEN + 1], result[8];
+    char guess[WORD_LEN + 99], word[WORD_LEN + 1], feedback[WORD_LEN + 1], result[8];
 
     guess_socket = socket(AF_INET, SOCK_STREAM, 0);
     server_address.sin_family = AF_INET;
@@ -35,6 +35,10 @@ int main() {
 
         send(guess_socket, guess, WORD_LEN, 0);
 
+        memset(word, 0, sizeof(word));
+        read(guess_socket, word, WORD_LEN);
+        word[WORD_LEN] = '\0';
+        printf("Feedback: %s\n", word);
         memset(feedback, 0, sizeof(feedback));
         read(guess_socket, feedback, WORD_LEN);
         feedback[WORD_LEN] = '\0';
