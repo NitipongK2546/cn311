@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <pthread.h> // Include for pthreads
+#include <pthread.h>
 
 #define SERVER_IP "127.0.0.1"
 #define PORT 12000
