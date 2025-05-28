@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 
 #define SERVER_IP "127.0.0.1"
 #define PORT 12000
@@ -11,89 +12,87 @@
 #define MAX_GUESSES 6
 #define WORD_LEN 5
 
-void color_answer(char *guess, char *word, char *color) {
-    for (int i = 0; i < WORD_LEN; i++) {
-        if (guess[i] == word[i]) {
+typedef struct
+{
+    int host_sock;
+    int guess_sock;
+} game_session_args;
+
+// Function to determine feedback color
+void color_answer(char *guess, char *word, char *color)
+{
+    for (int i = 0; i < WORD_LEN; i++)
+    {
+        if (guess[i] == word[i])
+        {
             color[i] = 'G'; // Green: correct position
-        } else if (strchr(word, guess[i])) {
+        }
+        else if (strchr(word, guess[i]))
+        {
             color[i] = 'Y'; // Yellow: wrong position
-        } else {
+        }
+        else
+        {
             color[i] = 'B'; // Black: not in word
         }
     }
     color[WORD_LEN] = '\0';
 }
 
-int main(int argc, char *argv[]) {
+void *handle_game(void *arg)
+{
+    game_session_args *args = (game_session_args *)arg;
+    int client_host = args->host_sock;
+    int client_guess = args->guess_sock;
 
-    // if(argc != 2)
-    // {
-    //     maybe return a guide or maybe not.
-    //     return 1;
-    // } 
-
-    // Create socket to listen for port, for host, and for guesser.
-    int client_host, client_guess, listen_socket;
-
-    struct sockaddr_in server_address; // server address
-    int addrlen = sizeof(server_address); // 
-
-    // Create arrays to store word datas, +1 for /0 null terminator.
     char word[WORD_LEN + 1];
     char guess[WORD_LEN + 1];
     char color[WORD_LEN + 1];
-    char role[99];
 
-    listen_socket = socket(AF_INET, SOCK_STREAM, 0);
-
-    int opt = 1;
-    setsockopt(listen_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    server_address.sin_family = AF_INET;            // Use IPV4
-    server_address.sin_addr.s_addr = INADDR_ANY;    // Accept any IP
-    server_address.sin_port = htons(PORT);          // Use PORT variable -> 12000
-
-    bind(listen_socket, (struct sockaddr *)&server_address, sizeof(server_address));
-    listen(listen_socket, 2);
-
-    printf("Waiting for Client 1...\n");
-
-    client_host = accept(listen_socket, (struct sockaddr *)&server_address, (socklen_t*)&addrlen);
-
-    printf("Waiting for Client 2 (guesser)...\n");
-    client_guess = accept(listen_socket, (struct sockaddr *)&server_address, (socklen_t*)&addrlen);
-
+    // send message to host and guesser
     send(client_host, "Word Setter", strlen("Word Setter"), 0);
-
     send(client_guess, "Word Guesser\n", strlen("Word Guesser\n"), 0);
     send(client_guess, "Waiting for word...", strlen("Waiting for word..."), 0);
 
+    // Receive word from host client
     read(client_host, word, WORD_LEN);
     word[WORD_LEN] = '\0';
-    printf("Received word from Client 1: %s\n", word);
-
+    printf("Received word from Client (host_sock %d): %s\n", client_host, word);
     send(client_guess, "Ready", strlen("Ready"), 0);
 
-    for (int i = 0; i < MAX_GUESSES; i++) {
+    // Game loop
+    for (int i = 0; i < MAX_GUESSES; i++)
+    {
         int valread = read(client_guess, guess, WORD_LEN);
+        if (valread <= 0)
+        {
+            printf("Client (guess_sock %d) disconnected or error.\n", client_guess);
+            break; // Exit loop if client disconnects
+        }
         guess[WORD_LEN] = '\0';
-        printf("Guess %d: %s\n", i + 1, guess);
+        printf("Guess %d from (guess_sock %d): %s\n", i + 1, client_guess, guess);
 
         color_answer(guess, word, color);
         send(client_guess, guess, strlen(guess), 0);
         send(client_guess, color, strlen(color), 0);
-        
 
-        if (strcmp(guess, word) == 0) {
+        if (strcmp(guess, word) == 0)
+        {
             char *msg = "WIN";
             send(client_guess, msg, strlen(msg), 0);
             send(client_host, "The other player won.", strlen("The other player won."), 0);
+            printf("Game finished: WIN for guesser (guess_sock %d).\n", client_guess);
             break;
-        } else if (i == MAX_GUESSES - 1) {
+        }
+        else if (i == MAX_GUESSES - 1)
+        {
             char *msg = "LOSE";
             send(client_guess, msg, strlen(msg), 0);
             send(client_host, "The other player lost.", strlen("The other player lost."), 0);
-        } else {
+            printf("Game finished: LOSE for guesser (guess_sock %d).\n", client_guess);
+        }
+        else
+        {
             char *msg = "CONTINUE";
             send(client_guess, msg, strlen(msg), 0);
             send(client_host, "The other player guessed incorrectly.", strlen("The other player guessed incorrectly."), 0);
@@ -101,9 +100,99 @@ int main(int argc, char *argv[]) {
     }
 
     close(client_host);
-    close(listen_socket);
     close(client_guess);
+    free(args);
+    printf("Game session with host_sock %d and guess_sock %d ended.\n", client_host, client_guess);
+    pthread_exit(NULL); // Terminate the thread
+}
 
+int main()
+{
+    int listen_socket;
+    struct sockaddr_in server_address;
+    int addrlen = sizeof(server_address);
+
+    listen_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (listen_socket == -1)
+    {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    int opt = 1;
+    if (setsockopt(listen_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
+    {
+        perror("Setsockopt failed");
+        exit(EXIT_FAILURE);
+    }
+
+    server_address.sin_family = AF_INET;
+    server_address.sin_addr.s_addr = INADDR_ANY;
+    server_address.sin_port = htons(PORT);
+
+    if (bind(listen_socket, (struct sockaddr *)&server_address, sizeof(server_address)) == -1)
+    {
+        perror("Bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(listen_socket, 5) == -1)
+    { // Allow up to 5 pending connections
+        perror("Listen failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Server listening on port %d...\n", PORT);
+
+    while (1)
+    { // Main server loop to accept new connections
+        int client_host_sock, client_guess_sock;
+
+        printf("Waiting for Client 1 (Word Setter)...\n");
+        client_host_sock = accept(listen_socket, (struct sockaddr *)&server_address, (socklen_t *)&addrlen);
+        if (client_host_sock == -1)
+        {
+            perror("Accept client_host failed");
+            continue; // Continue listening for other connections
+        }
+        printf("Client 1 connected (socket %d).\n", client_host_sock);
+
+        printf("Waiting for Client 2 (Word Guesser)...\n");
+        client_guess_sock = accept(listen_socket, (struct sockaddr *)&server_address, (socklen_t *)&addrlen);
+        if (client_guess_sock == -1)
+        {
+            perror("Accept client_guess failed");
+            close(client_host_sock);
+            continue;
+        }
+        printf("Client 2 connected (socket %d).\n", client_guess_sock);
+
+        game_session_args *args = (game_session_args *)malloc(sizeof(game_session_args));
+        if (args == NULL)
+        {
+            perror("Failed to allocate memory for game arguments");
+            close(client_host_sock);
+            close(client_guess_sock);
+            continue;
+        }
+        args->host_sock = client_host_sock;
+        args->guess_sock = client_guess_sock;
+
+        pthread_t game_thread;
+        if (pthread_create(&game_thread, NULL, handle_game, (void *)args) != 0)
+        {
+            perror("Failed to create game thread");
+            close(client_host_sock);
+            close(client_guess_sock);
+            free(args); // Free if thread creation fails
+            continue;
+        }
+
+        // Detach the thread so it cleans up its resources automatically upon termination
+        pthread_detach(game_thread);
+        printf("New game thread created for host_sock %d and guess_sock %d.\n", client_host_sock, client_guess_sock);
+    }
+
+    close(listen_socket); // technically unreachable (infinite loop)
     return 0;
-
 }
