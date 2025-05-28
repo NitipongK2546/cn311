@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <pthread.h>
+#include <pthread.h> // Include for pthreads
 
 #define SERVER_IP "127.0.0.1"
 #define PORT 12000
@@ -39,6 +39,7 @@ void color_answer(char *guess, char *word, char *color)
     color[WORD_LEN] = '\0';
 }
 
+// This function will be executed by each new game (thread)
 void *handle_game(void *arg)
 {
     game_session_args *args = (game_session_args *)arg;
@@ -49,7 +50,7 @@ void *handle_game(void *arg)
     char guess[WORD_LEN + 1];
     char color[WORD_LEN + 1];
 
-    // send message to host and guesser
+    // Role assignment
     send(client_host, "Word Setter", strlen("Word Setter"), 0);
     send(client_guess, "Word Guesser\n", strlen("Word Guesser\n"), 0);
     send(client_guess, "Waiting for word...", strlen("Waiting for word..."), 0);
@@ -58,6 +59,7 @@ void *handle_game(void *arg)
     read(client_host, word, WORD_LEN);
     word[WORD_LEN] = '\0';
     printf("Received word from Client (host_sock %d): %s\n", client_host, word);
+
     send(client_guess, "Ready", strlen("Ready"), 0);
 
     // Game loop
@@ -113,34 +115,16 @@ int main()
     int addrlen = sizeof(server_address);
 
     listen_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (listen_socket == -1)
-    {
-        perror("Socket creation failed");
-        exit(EXIT_FAILURE);
-    }
 
     int opt = 1;
-    if (setsockopt(listen_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
-    {
-        perror("Setsockopt failed");
-        exit(EXIT_FAILURE);
-    }
+    setsockopt(listen_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1;
 
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = INADDR_ANY;
     server_address.sin_port = htons(PORT);
 
-    if (bind(listen_socket, (struct sockaddr *)&server_address, sizeof(server_address)) == -1)
-    {
-        perror("Bind failed");
-        exit(EXIT_FAILURE);
-    }
-
-    if (listen(listen_socket, 5) == -1)
-    { // Allow up to 5 pending connections
-        perror("Listen failed");
-        exit(EXIT_FAILURE);
-    }
+    bind(listen_socket, (struct sockaddr *)&server_address, sizeof(server_address)) == -1;
+    listen(listen_socket, 5);
 
     printf("Server listening on port %d...\n", PORT);
 
@@ -150,49 +134,21 @@ int main()
 
         printf("Waiting for Client 1 (Word Setter)...\n");
         client_host_sock = accept(listen_socket, (struct sockaddr *)&server_address, (socklen_t *)&addrlen);
-        if (client_host_sock == -1)
-        {
-            perror("Accept client_host failed");
-            continue; // Continue listening for other connections
-        }
         printf("Client 1 connected (socket %d).\n", client_host_sock);
 
         printf("Waiting for Client 2 (Word Guesser)...\n");
         client_guess_sock = accept(listen_socket, (struct sockaddr *)&server_address, (socklen_t *)&addrlen);
-        if (client_guess_sock == -1)
-        {
-            perror("Accept client_guess failed");
-            close(client_host_sock);
-            continue;
-        }
         printf("Client 2 connected (socket %d).\n", client_guess_sock);
 
+        // Prepare arguments for the new thread
         game_session_args *args = (game_session_args *)malloc(sizeof(game_session_args));
-        if (args == NULL)
-        {
-            perror("Failed to allocate memory for game arguments");
-            close(client_host_sock);
-            close(client_guess_sock);
-            continue;
-        }
-        args->host_sock = client_host_sock;
-        args->guess_sock = client_guess_sock;
 
         pthread_t game_thread;
-        if (pthread_create(&game_thread, NULL, handle_game, (void *)args) != 0)
-        {
-            perror("Failed to create game thread");
-            close(client_host_sock);
-            close(client_guess_sock);
-            free(args); // Free if thread creation fails
-            continue;
-        }
 
-        // Detach the thread so it cleans up its resources automatically upon termination
         pthread_detach(game_thread);
         printf("New game thread created for host_sock %d and guess_sock %d.\n", client_host_sock, client_guess_sock);
     }
 
-    close(listen_socket); // technically unreachable (infinite loop)
+    close(listen_socket); // This line is technically unreachable in the infinite loop
     return 0;
 }
