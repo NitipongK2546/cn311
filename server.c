@@ -12,11 +12,8 @@
 #define MAX_GUESSES 6
 #define WORD_LEN 5
 
-typedef struct
-{
-    int host_sock;
-    int guess_sock;
-} game_session_args;
+int g_client_host_sock;
+int g_client_guess_sock;
 
 // Function to determine feedback color
 void color_answer(char *guess, char *word, char *color)
@@ -42,9 +39,9 @@ void color_answer(char *guess, char *word, char *color)
 // This function will be executed by each new game (thread)
 void *handle_game(void *arg)
 {
-    game_session_args *args = (game_session_args *)arg;
-    int client_host = args->host_sock;
-    int client_guess = args->guess_sock;
+
+    int client_host = g_client_host_sock;
+    int client_guess = g_client_guess_sock;
 
     char word[WORD_LEN + 1];
     char guess[WORD_LEN + 1];
@@ -103,7 +100,6 @@ void *handle_game(void *arg)
 
     close(client_host);
     close(client_guess);
-    free(args);
     printf("Game session with host_sock %d and guess_sock %d ended.\n", client_host, client_guess);
     pthread_exit(NULL); // Terminate the thread
 }
@@ -141,18 +137,17 @@ int main()
         printf("Client 2 connected (socket %d).\n", client_guess_sock);
 
         // Prepare arguments for the new thread
-        game_session_args *args = (game_session_args *)malloc(sizeof(game_session_args));
 
-        args->host_sock = client_host_sock;
-        args->guess_sock = client_guess_sock;
+        g_client_host_sock = client_host_sock;
+        g_client_guess_sock = client_guess_sock;
 
         pthread_t game_thread;
 
-        if (pthread_create(&game_thread, NULL, handle_game, (void *)args) != 0) {
+        if (pthread_create(&game_thread, NULL, handle_game, NULL) != 0)
+        {
             perror("Failed to create thread");
             close(client_host_sock);
             close(client_guess_sock);
-            free(args);
             continue;
         }
 
@@ -160,6 +155,5 @@ int main()
         printf("New game thread created for host_sock %d and guess_sock %d.\n", client_host_sock, client_guess_sock);
     }
 
-    close(listen_socket); // This line is technically unreachable in the infinite loop
     return 0;
 }
