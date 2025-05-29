@@ -143,7 +143,18 @@ int main()
         // Prepare arguments for the new thread
         game_session_args *args = (game_session_args *)malloc(sizeof(game_session_args));
 
+        args->host_sock = client_host_sock;
+        args->guess_sock = client_guess_sock;
+
         pthread_t game_thread;
+
+        if (pthread_create(&game_thread, NULL, handle_game, (void *)args) != 0) {
+            perror("Failed to create thread");
+            close(client_host_sock);
+            close(client_guess_sock);
+            free(args);
+            continue;
+        }
 
         pthread_detach(game_thread);
         printf("New game thread created for host_sock %d and guess_sock %d.\n", client_host_sock, client_guess_sock);
